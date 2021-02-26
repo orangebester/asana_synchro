@@ -1,2 +1,4 @@
 /.vscode
 /venv
+/meta.json
+/__pycache__
