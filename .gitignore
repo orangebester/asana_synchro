@@ -1,4 +1,6 @@
 /.vscode
 /venv
-/meta.json
 /__pycache__
+/*pickle
+/*json
+/test.py
