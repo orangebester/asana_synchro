@@ -1,4 +1,5 @@
 import asana
+import time
 import json
 import os
 import datetime
@@ -34,6 +35,7 @@ def tasks_json():
 
 def cell_updater(cell_range_insert, value_range_body):
     # pylint: disable=maybe-no-member
+    time.sleep(1.1)
     service.spreadsheets().values().update(
         spreadsheetId=spreadsheet_id,
         valueInputOption='USER_ENTERED',
@@ -54,7 +56,7 @@ def cell_names():
     n = cell_days()
     alphabet = ['B', 'D', 'F', 'H', 'J', 'L',
                 'N', 'P', 'R', 'T', 'V', 'X', 'Z']
-    with open("meta1.json", 'r', encoding="utf-8") as f:
+    with open("meta.json", 'r', encoding="utf-8") as f:
         data = json.load(f)
         data = [k for k in data if not (k['completed_at'] == None)]
         data = sorted(data, key=lambda k: k['completed_at'])
@@ -76,8 +78,8 @@ def cell_names():
             'values': values
         }
         cell_updater(f"{alphabet[i]}1", value_range_body)
-        data_new = [k for k in data if (
-            k['assignee']['name'] == a and k['completed_at'] is not None and len(k['tags']) != 0)]
+        data_new = [k for k in data if (k['assignee'] is not None and k['assignee']
+                                        ['name'] == a and k['completed_at'] is not None)]
         for d in range(len(data_new)):
             data_new[d]['tags'] = [k for k in data_new[d]['tags']
                                    if float_tasks(k) != None]
@@ -88,7 +90,8 @@ def cell_names():
             else:
                 day = int(date[8] + date[9])
             data_new[d]['day'] = day
-        while len(data_new) > 0:
+        data_new = [k for k in data_new if len(k['tags']) != 0]
+        while len(data_new) >= 1:
             data_so_new = [k for k in data_new if (
                 k['day'] == data_new[0]['day'])]
             data_new = [k for k in data_new if k not in data_so_new]
