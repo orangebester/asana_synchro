@@ -51,6 +51,7 @@ def cell_appender(cell_range_insert, value_range_body):
 
 
 def cell_names():
+    n = cell_days()
     alphabet = ['B', 'D', 'F', 'H', 'J', 'L',
                 'N', 'P', 'R', 'T', 'V', 'X', 'Z']
     with open("meta1.json", 'r', encoding="utf-8") as f:
@@ -75,27 +76,58 @@ def cell_names():
             'values': values
         }
         cell_updater(f"{alphabet[i]}1", value_range_body)
-        data_new = [k for k in data if (k['assignee']['name'] == a)]
+        data_new = [k for k in data if (
+            k['assignee']['name'] == a and k['completed_at'] is not None and len(k['tags']) != 0)]
         for d in range(len(data_new)):
-            if (data_new[d]['completed_at'] is not None and data_new[d]['tags'] is not None):
-                values_tasks = (
-                    ('-',
-                     f"{data_new[d]['tags'][0]['name']} - {data_new[d]['name']}"),
-                    ('', '')
-                )
-                value_range_body_tasks = {
-                    'majorDimension': 'ROWS',
-                    'values': values_tasks
-                }
-                date = data_new[d]['completed_at']
-                date = list(date)
-                if date[8] == '0':
-                    day = int(date[9])
-                else:
-                    day = int(date[8]+date[9])
-                cell_updater(f'{alphabet[i]}{day+2}',
-                             value_range_body_tasks)
+            data_new[d]['tags'] = [k for k in data_new[d]['tags']
+                                   if float_tasks(k) != None]
+            date = data_new[d]['completed_at']
+            date = list(date)
+            if date[8] == '0':
+                day = int(date[9])
+            else:
+                day = int(date[8] + date[9])
+            data_new[d]['day'] = day
+        while len(data_new) > 0:
+            data_so_new = [k for k in data_new if (
+                k['day'] == data_new[0]['day'])]
+            data_new = [k for k in data_new if k not in data_so_new]
+            var1 = float(data_so_new[0]['tags'][0]['name'].replace(',', '.'))
+            var2 = f"{data_so_new[0]['tags'][0]['name'].replace('.',',')} - {data_so_new[0]['name']}\n"
+            if len(data_so_new) > 1:
+                for c in range(len(data_so_new[1:])):
+                    var1 += float(data_so_new[1:][c]['tags']
+                                  [0]['name'].replace(',', '.'))
+                    var2 += f"{data_so_new[1:][c]['tags'][0]['name'].replace('.',',')} - {data_so_new[1:][c]['name']}\n"
+            var1 = str(var1).replace('.', ',')
+            values_tasks = (
+                (f'{var1}',
+                    f"{var2}"),
+                ('', '')
+            )
+            value_range_body_tasks = {
+                'majorDimension': 'ROWS',
+                'values': values_tasks
+            }
+            cell_updater(f"{alphabet[i]}{data_so_new[0]['day']+2}",
+                         value_range_body_tasks)
+        values = (
+            (f'=СУММ({alphabet[i]}3:{alphabet[i]}{n-2})', ''),
+            ('', '')
+        )
+        value_range_body = {
+            'majorDimension': 'ROWS',
+            'values': values
+        }
+        cell_updater(f'{alphabet[i]}{n}', value_range_body)
         i += 1
+
+
+def float_tasks(a):
+    try:
+        return float(a['name'].replace(',', '.'))
+    except ValueError:
+        pass
 
 
 def cell_days():
@@ -125,7 +157,8 @@ def cell_days():
         }
         cell_updater(f'A{i}', value_range_body)
         i += 1
-    if i > (q_days[1]+2):
+    if i > (q_days[1] + 2):
+        i = i-1
         values_sum = (
             ('', ''),
             ('Сума', '')
@@ -134,7 +167,9 @@ def cell_days():
             'majorDimension': 'ROWS',
             'values': values_sum
         }
-        cell_appender(f'A{i-1}', value_range_body_sum)
+        cell_appender(f'A{i}', value_range_body_sum)
+        k = k+4
+        return k
 
 
 request_body = {
@@ -156,7 +191,5 @@ service.spreadsheets().batchUpdate(
 
 worksheet_name = now.strftime("%B %Y")
 
-
-# cell_days()
 
 cell_names()
