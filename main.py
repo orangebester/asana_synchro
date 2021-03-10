@@ -4,7 +4,9 @@ import json
 import os
 import datetime
 from calendar import monthrange
+from formatting import create_table, update_table, merge_columns, format_name, format_scnd_header, format_bold, format_days, format_tasks, format_time_tasks
 from Google import Create_Service
+
 # pylint: disable=maybe-no-member
 
 CLIENT_SECRET_SERVICE = 'client_secret.json'
@@ -13,7 +15,7 @@ API_VERSION = 'v4'
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
 personal_access_token = "1/1135096210698629:718f78c0f27970b442cd307018d87f8d"
-spreadsheet_id = '1wyOwn_21U_EtdHJTi7HJ-lGAc0_BsQQi40HelATS0lU'
+spreadsheet_id = '1LXz234UItKLiIccEgqjqwjkmvNfhcT2y_ni53AyEOOE'
 
 
 service = Create_Service(CLIENT_SECRET_SERVICE, API_NAME, API_VERSION, SCOPES)
@@ -24,13 +26,24 @@ worksheet_name = now.strftime("%B %Y")
 
 def tasks_json():
     output_list = []
+    output_list_subtasks = []
+    count = 0
     project_gid = ['1198913045061016', '1198913045061019',
                    '1198913121709013', '1198913121709020', '1198913121709027', '1198913121709034', '1198913121709041', '1199104176594285']
     # pylint: disable=maybe-no-member
     for i in project_gid:
         result = client.tasks.get_tasks_for_project(i, {'completed_since': f'{now.year}-{now.month:02d}-01T02:00:00.000Z'}, opt_pretty=True, opt_fields=[
-            'name', 'assignee.name', 'completed', 'completed_at',  'tags.name'])
+            'name', 'assignee.name', 'completed', 'completed_at',  'tags.name', 'subtasks'])
         output_list += list(result)
+    for i in output_list:
+        if len(i['subtasks']) != 0:
+            result = client.tasks.get_subtasks_for_task(i['gid'], {'completed_since': f'{now.year}-{now.month:02d}-01T02:00:00.000Z'}, opt_pretty=True, opt_fields=[
+                'name', 'assignee.name', 'completed', 'completed_at', 'tags.name'])
+            output_list_subtasks += list(result)
+            count += 1
+            if count % 149 == 0:
+                time.sleep(60.0)
+    output_list.extend(output_list_subtasks)
     with open("meta.json", "w", encoding="utf-8") as output:
         json.dump(output_list, output, ensure_ascii=False)
 
@@ -71,8 +84,8 @@ def tasks_spreadsheet():
             names_list.append(name)
     names_list = sorted(list(set(names_list)))
     i = 0
-    format_name()
-    format_scnd_header()
+    format_name(sheet_id, service, spreadsheet_id)
+    format_scnd_header(sheet_id, service, spreadsheet_id)
     for a in names_list:
         values = (
             (f'{a}', ''),
@@ -83,10 +96,10 @@ def tasks_spreadsheet():
             'values': values
         }
         cell_updater(f"{alphabet[i]}1", value_range_body)
-        merge_columns(startrow_index)
-        format_bold(startrow_index)
-        format_tasks(startrow_index)
-        format_time_tasks(startrow_index)
+        merge_columns(startrow_index, sheet_id, service, spreadsheet_id)
+        format_bold(startrow_index, sheet_id, service, spreadsheet_id)
+        format_tasks(startrow_index, sheet_id, service, spreadsheet_id)
+        format_time_tasks(startrow_index, sheet_id, service, spreadsheet_id)
         startrow_index += 2
         data_new = [k for k in data if (k['assignee'] is not None and k['assignee']
                                         ['name'] == a and k['completed_at'] is not None)]
@@ -182,340 +195,14 @@ def cell_days():
         }
         cell_appender(f'A{i}', value_range_body_sum)
         k = k + 4
-        format_days(k)
+        format_days(k, sheet_id, service, spreadsheet_id)
         return k
 
 
-def create_table():
-    request_body = {
-        'requests': [
-            {
-                'addSheet': {
-                    'properties': {
-                        'title': now.strftime("%B %Y"),
-                        'hidden': False
-                    }
-                }
-            }
-        ]
-    }
-
-    # pylint: disable=maybe-no-member
-    service.spreadsheets().batchUpdate(
-        spreadsheetId=spreadsheet_id, body=request_body).execute()
+tasks_json()
 
 
-def update_table():
-    request_body = {
-        'requests': [
-            {
-                'updateSheetProperties': {
-                    'properties': {
-                        'sheetId': sheet_id,
-                        'gridProperties': {
-                            'frozenRowCount': 2
-                        }
-                    },
-                    'fields': 'gridProperties.frozenRowCount'
-                }
-            }
-        ]
-
-    }
-
-    # pylint: disable=maybe-no-member
-    service.spreadsheets().batchUpdate(
-        spreadsheetId=spreadsheet_id, body=request_body).execute()
-
-
-def merge_columns(i):
-    request_body = {
-        "requests": [
-            {
-                "mergeCells": {
-                    "range": {
-                        "sheetId": sheet_id,
-                        "startRowIndex": 0,
-                        "endRowIndex": 1,
-                        "startColumnIndex": i,
-                        "endColumnIndex": i+2
-                    },
-                    "mergeType": "MERGE_ALL"
-                }
-            }
-        ]
-    }
-    # pylint: disable=maybe-no-member
-    time.sleep(1.1)
-    service.spreadsheets().batchUpdate(
-        spreadsheetId=spreadsheet_id, body=request_body).execute()
-
-
-def format_name():
-    request_body = {"requests": [
-        {
-            "repeatCell": {
-                "range": {
-                    "sheetId": sheet_id,
-                    "startRowIndex": 0,
-                    "endRowIndex": 1
-                },
-                "cell": {
-                    "userEnteredFormat": {
-                        "backgroundColor": {
-                            "red": 0.271,
-                            "green": 0.506,
-                            "blue": 0.557
-                        },
-                        "horizontalAlignment": "CENTER",
-                        "textFormat": {
-                            "foregroundColor": {
-                                "red": 1.0,
-                                "green": 1.0,
-                                "blue": 1.0
-                            },
-                            "fontSize": 10,
-                            "bold": True
-                        }
-                    }
-                },
-                "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)"
-            }
-        }
-    ]
-    }
-    # pylint: disable=maybe-no-member
-    service.spreadsheets().batchUpdate(
-        spreadsheetId=spreadsheet_id, body=request_body).execute()
-
-
-def format_scnd_header():
-    request_body = {"requests": [
-        {
-            "repeatCell": {
-                "range": {
-                    "sheetId": sheet_id,
-                    "startRowIndex": 1,
-                    "endRowIndex": 2
-                },
-                "cell": {
-                    "userEnteredFormat": {
-                        "backgroundColor": {
-                            "red": 1.0,
-                            "green": 0.898,
-                            "blue": 0.6
-                        },
-                        "horizontalAlignment": "CENTER",
-                        "textFormat": {
-                            "foregroundColor": {
-                                "red": 0.0,
-                                "green": 0.0,
-                                "blue": 0.0
-                            },
-                            "fontSize": 10
-                        }
-                    }
-                },
-                "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)"
-            }
-        }
-    ]
-    }
-    # pylint: disable=maybe-no-member
-    service.spreadsheets().batchUpdate(
-        spreadsheetId=spreadsheet_id, body=request_body).execute()
-
-
-def format_bold(i):
-    request_body = {"requests": [
-        {
-            "repeatCell": {
-                "range": {
-                    "sheetId": sheet_id,
-                    "startRowIndex": 1,
-                    "endRowIndex": 2,
-                    "startColumnIndex": i,
-                    "endColumnIndex": i+1
-                },
-                "cell": {
-                    "userEnteredFormat": {
-                        "backgroundColor": {
-                            "red": 1.0,
-                            "green": 0.898,
-                            "blue": 0.6
-                        },
-                        "horizontalAlignment": "CENTER",
-                        "textFormat": {
-                            "foregroundColor": {
-                                "red": 0.0,
-                                "green": 0.0,
-                                "blue": 0.0
-                            },
-                            "fontSize": 10,
-                            "bold": True
-                        }
-                    }
-                },
-                "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)"
-            }
-        }
-    ]
-    }
-    # pylint: disable=maybe-no-member
-    time.sleep(1.1)
-    service.spreadsheets().batchUpdate(
-        spreadsheetId=spreadsheet_id, body=request_body).execute()
-
-
-def format_days(i):
-    request_body = {"requests": [
-        {"updateDimensionProperties": {
-            "range": {
-                    "sheetId": sheet_id,
-                    "dimension": "COLUMNS",
-                    "startIndex": 0,
-                    "endIndex": 1
-                    },
-            "properties": {
-                "pixelSize": 43
-            },
-            "fields": "pixelSize"}
-         },
-        {
-            "repeatCell": {
-                "range": {
-                    "sheetId": sheet_id,
-                    "startRowIndex": 0,
-                    "endRowIndex": i,
-                    "startColumnIndex": 0,
-                    "endColumnIndex": 1
-                },
-                "cell": {
-                    "userEnteredFormat": {
-                        "horizontalAlignment": "CENTER",
-                        "textFormat": {
-                            "foregroundColor": {
-                                "red": 0.6,
-                                "green": 0.6,
-                                "blue": 0.6
-                            },
-                            "fontSize": 10
-                        }
-                    }
-                },
-                "fields": "userEnteredFormat(textFormat,horizontalAlignment)"
-            }
-        }]
-    }
-    # pylint: disable=maybe-no-member
-    time.sleep(1.1)
-    service.spreadsheets().batchUpdate(
-        spreadsheetId=spreadsheet_id, body=request_body).execute()
-
-
-def format_tasks(j):
-    request_body = {
-        "requests": [
-            {"updateDimensionProperties": {
-                "range": {
-                    "sheetId": sheet_id,
-                    "dimension": "COLUMNS",
-                    "startIndex": j+1,
-                    "endIndex": j+2
-                },
-                "properties": {
-                    "pixelSize": 274
-                },
-                "fields": "pixelSize"}
-             },
-            {
-                "repeatCell": {
-                    "range": {
-                        "sheetId": sheet_id,
-                        "startRowIndex": 2,
-                        "endRowIndex": 35,
-                        "startColumnIndex": j,
-                        "endColumnIndex": j+2
-                    },
-                    "cell": {
-                        "userEnteredFormat": {
-                            "horizontalAlignment": "LEFT",
-                            "verticalAlignment": "MIDDLE",
-                            "wrapStrategy": "WRAP",
-                            "textFormat": {
-                                "foregroundColor": {
-                                    "red": 0.0,
-                                    "green": 0.0,
-                                    "blue": 0.0
-                                },
-                                "fontSize": 10
-                            }
-                        }
-                    },
-                    "fields": "userEnteredFormat(textFormat,horizontalAlignment, verticalAlignment, wrapStrategy)"
-                }
-            }
-        ]
-    }
-    # pylint: disable=maybe-no-member
-    time.sleep(1.1)
-    service.spreadsheets().batchUpdate(
-        spreadsheetId=spreadsheet_id, body=request_body).execute()
-
-
-def format_time_tasks(j):
-    request_body = {
-        "requests": [
-            {
-                "updateDimensionProperties": {
-                    "range": {
-                        "sheetId": sheet_id,
-                        "dimension": "COLUMNS",
-                        "startIndex": j,
-                        "endIndex": j+1
-                    },
-                    "properties": {
-                        "pixelSize": 54
-                    },
-                    "fields": "pixelSize"}
-            },
-            {
-                "repeatCell": {
-                    "range": {
-                        "sheetId": sheet_id,
-                        "startRowIndex": 2,
-                        "endRowIndex": 35,
-                        "startColumnIndex": j,
-                        "endColumnIndex": j+1
-                    },
-                    "cell": {
-                        "userEnteredFormat": {
-                            "horizontalAlignment": "CENTER",
-                            "verticalAlignment": "MIDDLE",
-                            "wrapStrategy": "WRAP",
-                            "textFormat": {
-                                "foregroundColor": {
-                                    "red": 0.0,
-                                    "green": 0.0,
-                                    "blue": 0.0
-                                },
-                                "fontSize": 10,
-                                "bold": True
-                            }
-                        }
-                    },
-                    "fields": "userEnteredFormat(textFormat,horizontalAlignment, verticalAlignment, wrapStrategy)"
-                }
-            }
-        ]
-    }
-    # pylint: disable=maybe-no-member
-    time.sleep(1.1)
-    service.spreadsheets().batchUpdate(
-        spreadsheetId=spreadsheet_id, body=request_body).execute()
-
-
-create_table()
+create_table(now, service, spreadsheet_id)
 
 spreadsheet = service.spreadsheets().get(
     spreadsheetId=spreadsheet_id).execute()
@@ -523,8 +210,7 @@ for sheet in spreadsheet['sheets']:
     if sheet['properties']['title'] == f'{worksheet_name}':
         sheet_id = sheet['properties']['sheetId']
 
-tasks_json()
 
-update_table()
+update_table(sheet_id, service, spreadsheet_id)
 
 tasks_spreadsheet()
