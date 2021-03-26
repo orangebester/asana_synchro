@@ -1,0 +1,2 @@
+personal_access_token = "1/1135096210698629:718f78c0f27970b442cd307018d87f8d"
+spreadsheet_id = '1LXz234UItKLiIccEgqjqwjkmvNfhcT2y_ni53AyEOOE'

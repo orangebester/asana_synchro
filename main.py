@@ -1,11 +1,15 @@
-import asana
 import time
 import json
 import os
 import datetime
 from calendar import monthrange
-from formatting import create_table, update_table, merge_columns, format_name, format_scnd_header, format_bold, format_days, format_tasks, format_time_tasks
+
+import asana
 from Google import Create_Service
+
+from formatting import create_table, update_table, merge_columns, format_name, format_scnd_header, format_bold, format_days, format_tasks, format_time_tasks
+from personal_data import personal_access_token, spreadsheet_id
+
 
 # pylint: disable=maybe-no-member
 
@@ -13,9 +17,6 @@ CLIENT_SECRET_SERVICE = 'client_secret.json'
 API_NAME = 'sheets'
 API_VERSION = 'v4'
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-
-personal_access_token = "1/1135096210698629:718f78c0f27970b442cd307018d87f8d"
-spreadsheet_id = '1LXz234UItKLiIccEgqjqwjkmvNfhcT2y_ni53AyEOOE'
 
 
 service = Create_Service(CLIENT_SECRET_SERVICE, API_NAME, API_VERSION, SCOPES)
@@ -252,7 +253,6 @@ def cell_days():
 
 
 tasks_json()
-
 
 create_table(now, service, spreadsheet_id)
 
