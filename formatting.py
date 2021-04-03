@@ -4,7 +4,8 @@ import datetime
 from calendar import monthrange
 
 
-def create_table(now, service, spreadsheet_id):
+def create_table(service, spreadsheet_id):
+    now = datetime.datetime.now()
     request_body = {
         'requests': [
             {

@@ -2,6 +2,7 @@ import time
 import json
 import os
 import datetime
+import string
 from calendar import monthrange
 
 import asana
@@ -21,10 +22,10 @@ SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
 service = Create_Service(CLIENT_SECRET_SERVICE, API_NAME, API_VERSION, SCOPES)
 client = asana.Client.access_token(personal_access_token)
-now = datetime.datetime.now()
 
 
 def get_sheet_id():
+    worksheet_name = datetime.datetime.now().strftime("%B %Y")
     spreadsheet = service.spreadsheets().get(
         spreadsheetId=spreadsheet_id).execute()
     for sheet in spreadsheet['sheets']:
@@ -46,8 +47,18 @@ def download_project_tasks(project_id):
     return list(tasks)
 
 
-def download_project_subtasks(task_id):
-    return []
+def download_project_subtasks(task):
+    now = datetime.datetime.now()
+    fields = [
+        'name', 'assignee.name', 'completed', 'completed_at', 'tags.name']
+    subtasks = client.tasks.get_subtasks_for_task(
+        task,
+        {'completed_since': f'{now.year}-{now.month:02d}-01T02:00:00.000Z'},
+        opt_pretty=True,
+        opt_fields=fields
+    )
+
+    return list(subtasks)
 
 
 def dump_tasks(tasks, file_path):
@@ -64,7 +75,11 @@ def download_tasks(project_ids):
 
 
 def download_subtasks(tasks):
-    subtasks = []
+    subtasks = [
+        subtask
+        for task in tasks
+        for subtask in download_project_subtasks(tasks)
+    ]
 
     for i, task in enumerate(tasks):
         if task['subtasks']:
@@ -87,12 +102,13 @@ def get_tasks(project_ids):
 def update_cells(cell_range_insert, value_range_body):
     """Updates data in cells
 
-    Args: 
+    Args:
         cell_range_insert (str): starting cell range
         value_range_body (dict): values to download
     """
 
     # pylint: disable=maybe-no-member
+    worksheet_name = datetime.datetime.now().strftime("%B %Y")
     time.sleep(1.1)
     service.spreadsheets().values().update(
         spreadsheetId=spreadsheet_id,
@@ -103,8 +119,7 @@ def update_cells(cell_range_insert, value_range_body):
 
 def create_28_days():
     values_time = (
-        ('1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15',
-         '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28'),
+        tuple(map(str, range(1, 29))),
         ('', '')
     )
     value_range_body_time = {
@@ -148,13 +163,13 @@ def add_sum_cell(position):
 def create_days_of_month():
     """Creates days in table referring to number of days of current month
 
-    Returns: 
+    Returns:
         last_day: position in sheet of the last day of month
     """
     # pylint: disable=maybe-no-member
 
     create_28_days()
-
+    now = datetime.datetime.now()
     q_days = monthrange(now.year, now.month)[1]+2
     last_day = 28
     min_days = 31
@@ -170,16 +185,16 @@ def download_from_json(file_path):
     # downloading data from json
     with open(file_path, 'r', encoding="utf-8") as f:
         data = json.load(f)
-        data = [k for k in data if not (k['completed_at'] == None)]
+        data = [k for k in data if not (k['completed_at'] is None)]
         data = sorted(data, key=lambda k: k['completed_at'])
         return data
 
 
 def download_names(data):
     names_list = []
-    for i in range(len(data)):
-        if data[i]['assignee'] is not None:
-            name = data[i]['assignee']['name']
+    for item in data:
+        if data[item]['assignee'] is not None:
+            name = data[item]['assignee']['name']
             names_list.append(name)
     names_list = sorted(list(set(names_list)))
     return names_list
@@ -189,11 +204,11 @@ def update_positions_for_assignee(assignee):
 
     letters = ['B', 'D', 'F', 'H', 'J', 'L',
                'N', 'P', 'R', 'T', 'V', 'X', 'Z']
-    alphabet = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L',
-                'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z']
+    alphabet = [string.ascii_uppercase]
 
-    if len(assignee) > len(letters):
-
+    if len(assignee) <= len(letters):
+        return letters
+    else:
         new_letters = []
         number_iterations = list(range(len(assignee) // len(letters)))
 
@@ -202,8 +217,6 @@ def update_positions_for_assignee(assignee):
                 new_element = f'{alphabet[element]}'+f'{letter}'
                 new_letters.append(new_element)
         letters += new_letters
-        return letters
-    else:
         return letters
 
 
@@ -235,11 +248,14 @@ def add_day(data_sorted, task):
 
 
 def sort_task(data, name):
-    data_sorted = [k for k in data if (k['assignee'] is not None and k['assignee']
-                                       ['name'] == name and k['completed_at'] is not None)]
-    for task in range(len(data_sorted)):
+    data_sorted = [k for k in data if (
+        k['assignee'] is not None
+        and k['assignee']['name'] == name
+        and k['completed_at'] is not None)]
+
+    for task in data_sorted:
         data_sorted[task]['tags'] = [k for k in data_sorted[task]['tags']
-                                     if float_tasks(k) != None]
+                                     if float_tasks(k) is not None]
         add_day(data_sorted, task)
     return data_sorted
 
@@ -336,11 +352,9 @@ def update_tasks_table():
     update_by_name(data, names_list, position_letter, position_number)
 
 
-get_tasks(project_ids)
-
-create_table(now, service, spreadsheet_id)
-worksheet_name = now.strftime("%B %Y")
-sheet_id = get_sheet_id()
-update_table(sheet_id, service, spreadsheet_id)
-
-update_tasks_table()
+if __name__ == "__main__":
+    get_tasks(project_ids)
+    create_table(service, spreadsheet_id)
+    sheet_id = get_sheet_id()
+    update_table(sheet_id, service, spreadsheet_id)
+    update_tasks_table()
